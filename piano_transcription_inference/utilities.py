@@ -2,6 +2,7 @@ import os
 import numpy as np
 import audioread
 import librosa
+import librosa.util
 from mido import MidiFile
 
 from .piano_vad import (note_detection_with_onset_offset_regress, 
@@ -85,7 +86,7 @@ def read_midi(midi_path):
     return midi_dict
 
 
-def write_events_to_midi(start_time, note_events, pedal_events, midi_path):
+def write_events_to_midi(start_time, note_events, pedal_events, midi_path, type0=False):
     """Write out note events to MIDI file.
 
     Args:
@@ -107,16 +108,23 @@ def write_events_to_midi(start_time, note_events, pedal_events, midi_path):
     midi_file = MidiFile()
     midi_file.ticks_per_beat = ticks_per_beat
 
+    if type0:
+        midi_file.type = 0
+
     # Track 0
     track0 = MidiTrack()
     track0.append(MetaMessage('set_tempo', tempo=microseconds_per_beat, time=0))
     track0.append(MetaMessage('time_signature', numerator=4, denominator=4, time=0))
-    track0.append(MetaMessage('end_of_track', time=1))
-    midi_file.tracks.append(track0)
+    if not type0:
+        track0.append(MetaMessage('end_of_track', time=1))
+        midi_file.tracks.append(track0)
 
     # Track 1
-    track1 = MidiTrack()
-    
+    if type0:
+        track1 = track0
+    else:
+        track1 = MidiTrack()
+
     # Message rolls of MIDI
     message_roll = []
 
@@ -520,7 +528,7 @@ def load_audio(path, sr=22050, mono=True, offset=0.0, duration=None,
         n = 0
 
         for frame in input_file:
-            frame = librosa.core.audio.util.buf_to_float(frame, dtype=dtype)
+            frame = librosa.util.buf_to_float(frame, dtype=dtype)
             n_prev = n
             n = n + len(frame)
 
@@ -550,10 +558,10 @@ def load_audio(path, sr=22050, mono=True, offset=0.0, duration=None,
         if n_channels > 1:
             y = y.reshape((-1, n_channels)).T
             if mono:
-                y = librosa.core.audio.to_mono(y)
+                y = librosa.to_mono(y)
 
         if sr is not None:
-            y = librosa.core.audio.resample(y, sr_native, sr, res_type=res_type)
+            y = librosa.resample(y, orig_sr=sr_native, target_sr=sr, res_type=res_type)
 
         else:
             sr = sr_native
